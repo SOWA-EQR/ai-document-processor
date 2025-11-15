@@ -1,0 +1,58 @@
+@using System.Text.Json
+@model JsonElement
+
+@{
+    var propertyAddress = GetJsonValue(Model, "property_address");
+    var monthlyRent = GetJsonValue(Model, "monthly_rent");
+    var tenantName = GetJsonValue(Model, "tenant_name");
+    var leaseStartDate = GetJsonValue(Model, "lease_start_date");
+}
+
+<div class="small">
+    @if (!string.IsNullOrEmpty(propertyAddress))
+    {
+        <div class="mb-1">
+            <i class="fas fa-map-marker-alt text-primary"></i>
+            <strong>Address:</strong> @propertyAddress
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(monthlyRent))
+    {
+        <div class="mb-1">
+            <i class="fas fa-dollar-sign text-success"></i>
+            <strong>Rent:</strong> @monthlyRent
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(tenantName))
+    {
+        <div class="mb-1">
+            <i class="fas fa-user text-info"></i>
+            <strong>Tenant:</strong> @tenantName
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(leaseStartDate))
+    {
+        <div class="mb-1">
+            <i class="fas fa-calendar text-warning"></i>
+            <strong>Start Date:</strong> @leaseStartDate
+        </div>
+    }
+</div>
+
+@functions {
+    private string GetJsonValue(JsonElement element, string propertyName)
+    {
+        try
+        {
+            if (element.TryGetProperty(propertyName, out var value))
+            {
+                return value.GetString() ?? "";
+            }
+            return "";
+        }
+        catch
+        {
+            return "";
+        }
+    }
+}

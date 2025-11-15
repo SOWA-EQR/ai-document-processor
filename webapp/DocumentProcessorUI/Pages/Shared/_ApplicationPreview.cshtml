@@ -1,0 +1,58 @@
+@using System.Text.Json
+@model JsonElement
+
+@{
+    var applicantName = GetJsonValue(Model, "applicant_name");
+    var monthlyIncome = GetJsonValue(Model, "monthly_income");
+    var employerName = GetJsonValue(Model, "employer_name");
+    var applicantPhone = GetJsonValue(Model, "applicant_phone");
+}
+
+<div class="small">
+    @if (!string.IsNullOrEmpty(applicantName))
+    {
+        <div class="mb-1">
+            <i class="fas fa-user text-primary"></i>
+            <strong>Applicant:</strong> @applicantName
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(monthlyIncome))
+    {
+        <div class="mb-1">
+            <i class="fas fa-dollar-sign text-success"></i>
+            <strong>Income:</strong> @monthlyIncome
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(employerName))
+    {
+        <div class="mb-1">
+            <i class="fas fa-building text-info"></i>
+            <strong>Employer:</strong> @employerName
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(applicantPhone))
+    {
+        <div class="mb-1">
+            <i class="fas fa-phone text-warning"></i>
+            <strong>Phone:</strong> @applicantPhone
+        </div>
+    }
+</div>
+
+@functions {
+    private string GetJsonValue(JsonElement element, string propertyName)
+    {
+        try
+        {
+            if (element.TryGetProperty(propertyName, out var value))
+            {
+                return value.GetString() ?? "";
+            }
+            return "";
+        }
+        catch
+        {
+            return "";
+        }
+    }
+}

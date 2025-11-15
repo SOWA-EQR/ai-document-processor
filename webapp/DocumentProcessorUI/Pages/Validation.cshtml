@@ -1,0 +1,359 @@
+@page
+@model DocumentProcessorUI.Pages.ValidationModel
+@{
+    ViewData["Title"] = "Document Validation";
+}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="display-5 mb-4">
+                <i class="fas fa-check-circle text-success"></i>
+                Document Validation & Review
+            </h1>
+            <p class="lead">Review and validate extracted data from processed documents.</p>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-3">
+                            <label for="documentType" class="form-label">Document Type</label>
+                            <select id="documentType" name="documentType" class="form-select">
+                                <option value="">All Types</option>
+                                <option value="lease" selected="@(Model.DocumentType == "lease")">Lease Agreement</option>
+                                <option value="application" selected="@(Model.DocumentType == "application")">Rental Application</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="dateFrom" class="form-label">From Date</label>
+                            <input type="date" id="dateFrom" name="dateFrom" class="form-control" value="@Model.DateFrom?.ToString("yyyy-MM-dd")">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="dateTo" class="form-label">To Date</label>
+                            <input type="date" id="dateTo" name="dateTo" class="form-control" value="@Model.DateTo?.ToString("yyyy-MM-dd")">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">&nbsp;</label>
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-filter"></i> Filter
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Documents List -->
+    <div class="row">
+        <div class="col-12">
+            @if (Model.ProcessedDocuments.Any())
+            {
+                <div class="row">
+                    @foreach (var document in Model.ProcessedDocuments)
+                    {
+                        <div class="col-lg-6 col-xl-4 mb-4">
+                            <div class="card h-100 shadow-sm">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="mb-0">
+                                            @if (document.document_type == "lease")
+                                            {
+                                                <i class="fas fa-home text-primary"></i>
+                                            }
+                                            else if (document.document_type == "application")
+                                            {
+                                                <i class="fas fa-user-edit text-success"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-file text-secondary"></i>
+                                            }
+                                            @document.document_type.ToUpper()
+                                        </h6>
+                                        <small class="text-muted">@document.processed_date.ToString("MMM dd, yyyy HH:mm")</small>
+                                    </div>
+                                    <span class="badge bg-success">Processed</span>
+                                </div>
+                                <div class="card-body">
+                                    <h6 class="card-title">@document.document_name</h6>
+                                    <p class="card-text text-muted small mb-3">
+                                        Size: @FormatFileSize(document.file_size) | 
+                                        Version: @document.processing_version
+                                    </p>
+                                    
+                                    <!-- Quick Preview of Extracted Data -->
+                                    <div class="mb-3">
+                                        @if (document.document_type == "lease")
+                                        {
+                                            @await Html.PartialAsync("_LeasePreview", document.extracted_data)
+                                        }
+                                        else if (document.document_type == "application")
+                                        {
+                                            @await Html.PartialAsync("_ApplicationPreview", document.extracted_data)
+                                        }
+                                        else
+                                        {
+                                            <p class="text-muted small">Document processed successfully</p>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="card-footer bg-transparent">
+                                    <div class="btn-group w-100" role="group">
+                                        <button type="button" class="btn btn-outline-primary btn-sm" 
+                                                onclick="viewDocument('@document.id')">
+                                            <i class="fas fa-eye"></i> View
+                                        </button>
+                                        <button type="button" class="btn btn-outline-success btn-sm" 
+                                                onclick="validateDocument('@document.id')">
+                                            <i class="fas fa-check"></i> Validate
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" 
+                                                onclick="downloadDocument('@document.id')">
+                                            <i class="fas fa-download"></i> Export
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+                
+                <!-- Pagination would go here if needed -->
+                @if (Model.ProcessedDocuments.Count() >= 50)
+                {
+                    <nav>
+                        <ul class="pagination justify-content-center">
+                            <li class="page-item disabled">
+                                <span class="page-link">Previous</span>
+                            </li>
+                            <li class="page-item active">
+                                <span class="page-link">1</span>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="#">Next</a>
+                            </li>
+                        </ul>
+                    </nav>
+                }
+            }
+            else
+            {
+                <div class="text-center py-5">
+                    <i class="fas fa-inbox fa-4x text-muted mb-3"></i>
+                    <h4>No processed documents found</h4>
+                    <p class="text-muted">Try adjusting your filters or <a href="/">upload some documents</a> to get started.</p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Document Details Modal -->
+<div class="modal fade" id="documentModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="documentModalTitle">Document Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="documentModalBody">
+                <!-- Content loaded dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-success" id="saveValidationBtn">
+                    <i class="fas fa-save"></i> Save Validation
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Validation Modal -->
+<div class="modal fade" id="validationModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-check-circle"></i>
+                    Validate Extracted Data
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="validationModalBody">
+                <!-- Validation form loaded dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="confirmValidationBtn">
+                    <i class="fas fa-check"></i> Confirm Validation
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // View document details
+        async function viewDocument(documentId) {
+            try {
+                const response = await fetch(`/api/documents/${documentId}`);
+                const document = await response.json();
+                
+                document.getElementById('documentModalTitle').textContent = document.document_name;
+                document.getElementById('documentModalBody').innerHTML = formatDocumentDetails(document);
+                
+                const modal = new bootstrap.Modal(document.getElementById('documentModal'));
+                modal.show();
+            } catch (error) {
+                console.error('Error loading document:', error);
+                alert('Error loading document details');
+            }
+        }
+
+        // Validate document
+        async function validateDocument(documentId) {
+            try {
+                const response = await fetch(`/api/documents/${documentId}/validation-form`);
+                const html = await response.text();
+                
+                document.getElementById('validationModalBody').innerHTML = html;
+                
+                const modal = new bootstrap.Modal(document.getElementById('validationModal'));
+                modal.show();
+                
+                // Store document ID for validation
+                document.getElementById('confirmValidationBtn').setAttribute('data-document-id', documentId);
+            } catch (error) {
+                console.error('Error loading validation form:', error);
+                alert('Error loading validation form');
+            }
+        }
+
+        // Download/Export document
+        async function downloadDocument(documentId) {
+            try {
+                window.open(`/api/documents/${documentId}/export`, '_blank');
+            } catch (error) {
+                console.error('Error downloading document:', error);
+                alert('Error downloading document');
+            }
+        }
+
+        // Format document details for modal
+        function formatDocumentDetails(doc) {
+            let html = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Document Information</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>Name:</strong> ${doc.document_name}</li>
+                            <li><strong>Type:</strong> <span class="badge bg-primary">${doc.document_type}</span></li>
+                            <li><strong>Processed:</strong> ${new Date(doc.processed_date).toLocaleString()}</li>
+                            <li><strong>Size:</strong> ${formatFileSize(doc.file_size)}</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Processing Information</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>Version:</strong> ${doc.processing_version}</li>
+                            <li><strong>Container:</strong> ${doc.container_name}</li>
+                        </ul>
+                    </div>
+                </div>
+                <hr>
+                <h6>Extracted Data</h6>
+                <div class="bg-light rounded p-3">
+                    <pre style="white-space: pre-wrap; max-height: 400px; overflow-y: auto;">${JSON.stringify(doc.extracted_data, null, 2)}</pre>
+                </div>
+            `;
+            
+            if (doc.searchable_text) {
+                html += `
+                    <hr>
+                    <h6>Full Text Content</h6>
+                    <div class="bg-light rounded p-3" style="max-height: 300px; overflow-y: auto;">
+                        <p>${doc.searchable_text}</p>
+                    </div>
+                `;
+            }
+            
+            return html;
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Handle validation confirmation
+        document.getElementById('confirmValidationBtn').addEventListener('click', async function() {
+            const documentId = this.getAttribute('data-document-id');
+            const form = document.getElementById('validationForm');
+            
+            if (form) {
+                const formData = new FormData(form);
+                const validationData = Object.fromEntries(formData);
+                
+                try {
+                    const response = await fetch(`/api/documents/${documentId}/validate`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(validationData)
+                    });
+                    
+                    if (response.ok) {
+                        bootstrap.Modal.getInstance(document.getElementById('validationModal')).hide();
+                        showNotification('Validation saved successfully!', 'success');
+                        // Refresh the page or update the UI
+                        location.reload();
+                    } else {
+                        throw new Error('Validation failed');
+                    }
+                } catch (error) {
+                    console.error('Error saving validation:', error);
+                    alert('Error saving validation');
+                }
+            }
+        });
+
+        function showNotification(message, type) {
+            const toast = document.createElement('div');
+            toast.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
+            toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            toast.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 5000);
+        }
+    </script>
+}
+
+@functions {
+    private string FormatFileSize(int bytes)
+    {
+        if (bytes == 0) return "0 Bytes";
+        string[] sizes = { "Bytes", "KB", "MB", "GB" };
+        int i = (int)Math.Floor(Math.Log(bytes) / Math.Log(1024));
+        return Math.Round(bytes / Math.Pow(1024, i), 2) + " " + sizes[i];
+    }
+}

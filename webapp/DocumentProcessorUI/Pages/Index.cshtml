@@ -1,0 +1,437 @@
+@page
+@model DocumentProcessorUI.Pages.IndexModel
+@{
+    ViewData["Title"] = "Equity Residential Document Processor";
+}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex align-items-center mb-4">
+                <img src="https://media.equityapartments.com/image/upload/Content/equity_residential_PMSCG11.svg" 
+                     alt="Equity Residential" 
+                     class="main-logo"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
+                <div class="er-logo-fallback" style="display: none;">ER</div>
+                <div>
+                    <h1 class="display-4 mb-2 er-heading">Document Processing</h1>
+                    <p class="lead mb-0 er-subheading">Streamline your lease agreement and rental application processing with AI-powered data extraction and validation.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Upload Section -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        Document Upload
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- File Upload Form -->
+                    <form id="uploadForm" method="post" enctype="multipart/form-data">
+                        <div class="mb-4">
+                            <label for="documentType" class="form-label"><i class="fas fa-tags"></i> Document Type</label>
+                            <select id="documentType" name="documentType" class="form-select" required>
+                                <option value="">Select document type...</option>
+                                <option value="lease">Lease Agreement</option>
+                                <option value="application">Rental Application</option>
+                                <option value="move-in">Move-In Inspection</option>
+                                <option value="move-out">Move-Out Inspection</option>
+                                <option value="maintenance">Maintenance Request</option>
+                                <option value="other">Other Property Document</option>
+                            </select>
+                        </div>
+
+                        <!-- Drag & Drop Area -->
+                        <div id="dropZone" class="border border-2 border-dashed border-primary rounded p-5 text-center mb-4 bg-light">
+                            <div id="dropZoneContent">
+                                <i class="fas fa-file-contract fa-3x text-primary mb-3"></i>
+                                <h5>Upload Property Documents</h5>
+                                <p class="text-muted">Drag & drop PDF files or click to browse<br>
+                                <small>Supported: Lease agreements, rental applications, inspections, and maintenance requests</small></p>
+                                <input type="file" id="fileInput" name="files" accept=".pdf" multiple class="d-none">
+                                <button type="button" id="browseBtn" class="btn btn-outline-primary">
+                                    <i class="fas fa-folder-open"></i> Browse Documents
+                                </button>
+                            </div>
+                            <div id="dragOverlay" class="position-absolute top-0 start-0 w-100 h-100 bg-primary bg-opacity-25 rounded d-none align-items-center justify-content-center">
+                                <div class="text-white">
+                                    <i class="fas fa-download fa-3x mb-2"></i>
+                                    <h4>Drop files here</h4>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- File List -->
+                        <div id="fileList" class="mb-4" style="display: none;">
+                            <h6>Selected Files:</h6>
+                            <div id="fileItems"></div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="d-grid">
+                            <button type="submit" id="uploadBtn" class="btn btn-primary btn-lg" disabled>
+                                <i class="fas fa-rocket"></i>
+                                Start Processing
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Processing -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-history"></i>
+                        Recent Processing
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="recentProcessing">
+                        <p class="text-muted">No recent processing activity.</p>
+                    </div>
+                    <hr>
+                    <div class="d-grid">
+                        <a href="/Validation" class="btn btn-outline-success">
+                            <i class="fas fa-check-circle"></i>
+                            View All Results
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Processing Modal -->
+    <div class="modal fade" id="processingModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-cog fa-spin"></i>
+                        Processing Documents
+                    </h5>
+                </div>
+                <div class="modal-body">
+                    <div id="processingList"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="closeProcessingBtn" class="btn btn-secondary" data-bs-dismiss="modal" disabled>
+                        Close
+                    </button>
+                    <button type="button" id="viewResultsBtn" class="btn btn-primary" style="display: none;">
+                        <i class="fas fa-eye"></i>
+                        View Results
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <!-- Include SignalR from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@@microsoft/signalr@@8.0.7/dist/browser/signalr.min.js"></script>
+    
+    <script>
+        // Global variables
+        let connection;
+        let selectedFiles = [];
+        let processingStatus = [];
+
+        // Initialize SignalR connection
+        function initializeSignalR() {
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl("/documentProcessingHub")
+                .build();
+
+            connection.start().then(function () {
+                console.log("SignalR connected");
+            }).catch(function (err) {
+                console.error("SignalR connection error: " + err.toString());
+            });
+
+            // Handle progress updates
+            connection.on("ReceiveProgressUpdate", function (processingId, percentage, status, message) {
+                updateProgress(processingId, percentage, status, message);
+            });
+
+            // Handle completion
+            connection.on("ReceiveProcessingComplete", function (processingId, result) {
+                completeProcessing(processingId, result);
+            });
+
+            // Handle errors
+            connection.on("ReceiveProcessingError", function (processingId, error) {
+                errorProcessing(processingId, error);
+            });
+        }
+
+        // File handling
+        function initializeFileHandling() {
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('fileInput');
+            const browseBtn = document.getElementById('browseBtn');
+            const dragOverlay = document.getElementById('dragOverlay');
+
+            // Browse button click
+            browseBtn.addEventListener('click', () => fileInput.click());
+
+            // File input change
+            fileInput.addEventListener('change', handleFileSelect);
+
+            // Drag and drop events
+            dropZone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dragOverlay.classList.remove('d-none');
+                dragOverlay.classList.add('d-flex');
+            });
+
+            dropZone.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!dropZone.contains(e.relatedTarget)) {
+                    dragOverlay.classList.add('d-none');
+                    dragOverlay.classList.remove('d-flex');
+                }
+            });
+
+            dropZone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dragOverlay.classList.add('d-none');
+                dragOverlay.classList.remove('d-flex');
+                
+                const files = Array.from(e.dataTransfer.files).filter(file => file.type === 'application/pdf');
+                handleFiles(files);
+            });
+        }
+
+        function handleFileSelect(e) {
+            const files = Array.from(e.target.files);
+            handleFiles(files);
+        }
+
+        function handleFiles(files) {
+            selectedFiles = files;
+            displayFileList();
+            toggleUploadButton();
+        }
+
+        function displayFileList() {
+            const fileList = document.getElementById('fileList');
+            const fileItems = document.getElementById('fileItems');
+            
+            if (selectedFiles.length === 0) {
+                fileList.style.display = 'none';
+                return;
+            }
+
+            fileList.style.display = 'block';
+            fileItems.innerHTML = '';
+
+            selectedFiles.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'border rounded p-2 mb-2 d-flex justify-content-between align-items-center';
+                fileItem.innerHTML = `
+                    <div>
+                        <i class="fas fa-file-pdf text-danger"></i>
+                        <span class="ms-2">${file.name}</span>
+                        <small class="text-muted ms-2">(${formatFileSize(file.size)})</small>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeFile(${index})">
+                        <i class="fas fa-times"></i>
+                    </button>
+                `;
+                fileItems.appendChild(fileItem);
+            });
+        }
+
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            displayFileList();
+            toggleUploadButton();
+        }
+
+        function toggleUploadButton() {
+            const uploadBtn = document.getElementById('uploadBtn');
+            const documentType = document.getElementById('documentType').value;
+            uploadBtn.disabled = selectedFiles.length === 0 || !documentType;
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Form submission
+        function initializeFormHandling() {
+            const uploadForm = document.getElementById('uploadForm');
+            const documentTypeSelect = document.getElementById('documentType');
+            
+            documentTypeSelect.addEventListener('change', toggleUploadButton);
+            
+            uploadForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                if (selectedFiles.length === 0) return;
+                
+                // Show processing modal
+                const processingModal = new bootstrap.Modal(document.getElementById('processingModal'));
+                processingModal.show();
+                
+                // Process each file
+                processingStatus = [];
+                const processingList = document.getElementById('processingList');
+                processingList.innerHTML = '';
+                
+                for (let i = 0; i < selectedFiles.length; i++) {
+                    const file = selectedFiles[i];
+                    const processingId = generateProcessingId();
+                    
+                    processingStatus.push({
+                        id: processingId,
+                        fileName: file.name,
+                        percentage: 0,
+                        status: 'Starting',
+                        message: 'Preparing to upload...'
+                    });
+                    
+                    addProcessingItem(processingId, file.name);
+                    await processFile(file, processingId);
+                }
+            });
+        }
+
+        async function processFile(file, processingId) {
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('processingId', processingId);
+                formData.append('documentType', document.getElementById('documentType').value);
+
+                const response = await fetch('/api/process-document', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error('Upload failed');
+                }
+
+                // Join SignalR group for this processing
+                await connection.invoke("JoinProcessingGroup", processingId);
+                
+            } catch (error) {
+                errorProcessing(processingId, error.message);
+            }
+        }
+
+        function addProcessingItem(processingId, fileName) {
+            const processingList = document.getElementById('processingList');
+            const item = document.createElement('div');
+            item.id = `processing-${processingId}`;
+            item.className = 'border rounded p-3 mb-3';
+            item.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <strong>${fileName}</strong>
+                    <span class="badge bg-secondary" id="status-${processingId}">Starting</span>
+                </div>
+                <div class="progress mb-2">
+                    <div class="progress-bar" id="progress-${processingId}" role="progressbar" style="width: 0%"></div>
+                </div>
+                <small class="text-muted" id="message-${processingId}">Preparing to upload...</small>
+            `;
+            processingList.appendChild(item);
+        }
+
+        function updateProgress(processingId, percentage, status, message) {
+            const progressBar = document.getElementById(`progress-${processingId}`);
+            const statusBadge = document.getElementById(`status-${processingId}`);
+            const messageElement = document.getElementById(`message-${processingId}`);
+            
+            if (progressBar) progressBar.style.width = percentage + '%';
+            if (statusBadge) {
+                statusBadge.textContent = status;
+                statusBadge.className = `badge ${getStatusBadgeClass(status)}`;
+            }
+            if (messageElement) messageElement.textContent = message;
+        }
+
+        function completeProcessing(processingId, result) {
+            updateProgress(processingId, 100, 'Completed', 'Processing completed successfully!');
+            
+            // Check if all processing is complete
+            const allComplete = processingStatus.every(p => {
+                const statusBadge = document.getElementById(`status-${p.id}`);
+                return statusBadge && (statusBadge.textContent === 'Completed' || statusBadge.textContent === 'Failed');
+            });
+            
+            if (allComplete) {
+                document.getElementById('closeProcessingBtn').disabled = false;
+                document.getElementById('viewResultsBtn').style.display = 'inline-block';
+                showNotification('All documents processed successfully!', 'success');
+            }
+        }
+
+        function errorProcessing(processingId, error) {
+            updateProgress(processingId, 0, 'Failed', `Error: ${error}`);
+            showNotification(`Processing failed for document: ${error}`, 'error');
+        }
+
+        function getStatusBadgeClass(status) {
+            switch (status.toLowerCase()) {
+                case 'completed': return 'bg-success';
+                case 'failed': case 'error': return 'bg-danger';
+                case 'processing': return 'bg-primary';
+                default: return 'bg-secondary';
+            }
+        }
+
+        function generateProcessingId() {
+            return 'proc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function showNotification(message, type) {
+            // Simple toast notification
+            const toast = document.createElement('div');
+            toast.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
+            toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            toast.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 5000);
+        }
+
+        // Initialize everything when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSignalR();
+            initializeFileHandling();
+            initializeFormHandling();
+        });
+        
+        // Handle view results button
+        document.getElementById('viewResultsBtn').addEventListener('click', function() {
+            window.location.href = '/Validation';
+        });
+    </script>
+}
